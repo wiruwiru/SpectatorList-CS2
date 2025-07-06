@@ -1,11 +1,9 @@
 {
   "prefix": "{yellow}[SpectatorList]{default}",
   "no_permissions": "{red}No tienes permisos para usar este comando.",
-  "no_spectators": "No hay espectadores observándote",
-  "no_spectators_server": "No hay espectadores en el servidor.",
   "spectators_watching": "{yellow}Espectadores ({0}): {white}{1}",
-  "spectators_watching_center": "Espectadores ({0}): {1}",
-  "and_more": "y {0} más...",
-  "spectator_info_header": "Información de espectadores:",
-  "spectator_info_detail": "{green}{0}: {white}{1}"
+  "spectators_title": "Espectadores ({0}):",
+  "spectator_display_enabled": "Lista de espectadores {green}habilitada",
+  "spectator_display_disabled": "Lista de espectadores {red}deshabilitada",
+  "and_more": "y {0} más..."
 }

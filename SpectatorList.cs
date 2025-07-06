@@ -6,6 +6,7 @@ using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Timers;
 
 using SpectatorList.Configs;
+using SpectatorList.Managers;
 
 namespace SpectatorList;
 
@@ -13,33 +14,54 @@ namespace SpectatorList;
 public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 {
     public override string ModuleName => "SpectatorList";
-    public override string ModuleVersion => "1.0.0";
+    public override string ModuleVersion => "1.0.1";
     public override string ModuleAuthor => "luca.uy";
-    public override string ModuleDescription => "Toggle spectator list display via chat messages";
+    public override string ModuleDescription => "Toggle spectator list display via chat messages with ScreenView support and exclusion flags";
 
     public SpectatorConfig Config { get; set; } = new();
     private CounterStrikeSharp.API.Modules.Timers.Timer? _updateTimer;
     private Dictionary<int, List<string>> _lastSpectatorLists = new();
+    private DisplayManager? _displayManager;
 
     public void OnConfigParsed(SpectatorConfig config)
     {
         Config = config;
+
+        _displayManager?.Dispose();
+        _displayManager = new DisplayManager(Config, this);
+    }
+
+    private HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
+    {
+        _displayManager?.CleanupAllDisplays();
+        return HookResult.Continue;
     }
 
     public override void Load(bool hotReload)
     {
+        _displayManager = new DisplayManager(Config, this);
+
         foreach (var command in Config.Commands)
         {
             AddCommand(command, "Toggle spectator list display", OnSpectatorListCommand);
         }
 
         StartUpdateTimer();
+
+        RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
+        RegisterEventHandler<EventRoundEnd>(OnRoundEnd);
+        RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnectFull);
+        RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
+        RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
     }
 
     public override void Unload(bool hotReload)
     {
         _updateTimer?.Kill();
         _updateTimer = null;
+
+        _displayManager?.Dispose();
+        _displayManager = null;
     }
 
     private void StartUpdateTimer()
@@ -63,8 +85,27 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
             return;
         }
 
-        var spectators = GetPlayersSpectating(player);
-        DisplaySpectatorList(player, spectators);
+        if (!string.IsNullOrEmpty(Config.CanViewList) && !AdminManager.PlayerHasPermissions(player, Config.CanViewList))
+        {
+            commandInfo.ReplyToCommand($"{Localizer["prefix"]} {Localizer["no_permissions"]}");
+            return;
+        }
+
+        _displayManager?.TogglePlayerDisplay(player);
+
+        bool isEnabled = _displayManager?.IsPlayerDisplayEnabled(player) ?? false;
+        string message = isEnabled ? Localizer["spectator_display_enabled"] : Localizer["spectator_display_disabled"];
+
+        commandInfo.ReplyToCommand($"{Localizer["prefix"]} {message}");
+
+        if (isEnabled)
+        {
+            var spectators = GetPlayersSpectating(player);
+            if (spectators.Count > 0)
+            {
+                _displayManager?.DisplaySpectatorList(player, spectators);
+            }
+        }
     }
 
     private void CheckAndUpdateSpectatorLists()
@@ -90,10 +131,24 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 
             _lastSpectatorLists[player.Slot] = currentSpectatorNames;
 
-            if (hasChanged && Config.Update.ShowOnChange && currentSpectators.Count > 0)
+            if (hasChanged && Config.Update.ShowOnChange)
             {
-                DisplaySpectatorList(player, currentSpectators);
+                if (currentSpectators.Count > 0)
+                {
+                    _displayManager?.DisplaySpectatorList(player, currentSpectators);
+                }
+                else
+                {
+                    _displayManager?.CleanupPlayerDisplay(player);
+                }
             }
+        }
+
+        var alivePlayerSlots = alivePlayers.Select(p => p.Slot).ToHashSet();
+        var slotsToRemove = _lastSpectatorLists.Keys.Where(slot => !alivePlayerSlots.Contains(slot)).ToList();
+        foreach (var slot in slotsToRemove)
+        {
+            _lastSpectatorLists.Remove(slot);
         }
 
         if (Config.Update.ShowPeriodic)
@@ -119,7 +174,7 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
             var spectators = GetPlayersSpectating(player);
             if (spectators.Count > 0)
             {
-                DisplaySpectatorList(player, spectators);
+                _displayManager?.DisplaySpectatorList(player, spectators);
             }
         }
     }
@@ -170,20 +225,67 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
         return spectators;
     }
 
-    private void DisplaySpectatorList(CCSPlayerController player, List<CCSPlayerController> spectators)
+    private HookResult OnPlayerConnectFull(EventPlayerConnectFull @event, GameEventInfo info)
     {
-        var spectatorNames = spectators.Select(s => s.PlayerName).ToList();
-        var spectatorCount = spectators.Count;
+        return HookResult.Continue;
+    }
 
-        if (spectatorNames.Count > Config.Display.MaxNamesInMessage)
+    private HookResult OnPlayerDisconnect(EventPlayerDisconnect @event, GameEventInfo info)
+    {
+        var player = @event.Userid;
+        if (player != null && player.IsValid)
         {
-            var remainingCount = spectatorNames.Count - Config.Display.MaxNamesInMessage;
-            spectatorNames = spectatorNames.Take(Config.Display.MaxNamesInMessage).ToList();
-            spectatorNames.Add(Localizer["and_more", remainingCount]);
+            _displayManager?.OnPlayerDisconnect(player);
         }
+        return HookResult.Continue;
+    }
 
-        var spectatorList = string.Join(", ", spectatorNames);
-        var chatMessage = $"{Localizer["prefix"]} {Localizer["spectators_watching", spectatorCount, spectatorList]}";
-        player.PrintToChat(chatMessage);
+    private HookResult OnPlayerSpawn(EventPlayerSpawn @event, GameEventInfo info)
+    {
+        var player = @event.Userid;
+        if (player != null && player.IsValid)
+        {
+            Server.NextFrame(() =>
+            {
+                UpdateAllSpectatorLists();
+            });
+        }
+        return HookResult.Continue;
+    }
+
+    private HookResult OnPlayerDeath(EventPlayerDeath @event, GameEventInfo info)
+    {
+        var player = @event.Userid;
+        if (player != null && player.IsValid)
+        {
+            _displayManager?.CleanupPlayerDisplay(player);
+
+            Server.NextFrame(() =>
+            {
+                UpdateAllSpectatorLists();
+            });
+        }
+        return HookResult.Continue;
+    }
+
+    private void UpdateAllSpectatorLists()
+    {
+        var alivePlayers = Utilities.GetPlayers().Where(p => p.IsValid && p.PawnIsAlive).ToList();
+
+        foreach (var player in alivePlayers)
+        {
+            var currentSpectators = GetPlayersSpectating(player);
+            if (currentSpectators.Count > 0)
+            {
+                _displayManager?.DisplaySpectatorList(player, currentSpectators);
+            }
+            else
+            {
+                _displayManager?.CleanupPlayerDisplay(player);
+            }
+
+            var currentSpectatorNames = currentSpectators.Select(s => s.PlayerName).ToList();
+            _lastSpectatorLists[player.Slot] = currentSpectatorNames;
+        }
     }
 }
