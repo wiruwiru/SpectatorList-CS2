@@ -1,6 +1,8 @@
 # SpectatorList CS2
 Shows real-time spectators both in chat messages and on-screen display with customizable permissions and exclusion flags.
 
+![Counter-strike 2 Screenshot 2025 07 06 - 19 34 39 42](https://github.com/user-attachments/assets/d8a908ea-7baa-4609-bdee-29545edd693e)
+
 ---
 
 ### Installation
