@@ -1,12 +1,15 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes;
+using CounterStrikeSharp.API.Core.Capabilities;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Timers;
+using PlayerSettings;
 
 using SpectatorList.Configs;
 using SpectatorList.Managers;
+using SpectatorList.Services;
 
 namespace SpectatorList;
 
@@ -14,7 +17,7 @@ namespace SpectatorList;
 public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 {
     public override string ModuleName => "SpectatorList";
-    public override string ModuleVersion => "1.0.2";
+    public override string ModuleVersion => "1.0.3";
     public override string ModuleAuthor => "luca.uy";
     public override string ModuleDescription => "Toggle spectator list display via chat messages with ScreenView support and exclusion flags";
 
@@ -22,13 +25,33 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
     private CounterStrikeSharp.API.Modules.Timers.Timer? _updateTimer;
     private Dictionary<int, List<string>> _lastSpectatorLists = new();
     private DisplayManager? _displayManager;
+    private IStorageService? _storageService;
+    private ISettingsApi? _settingsApi;
+    private readonly PluginCapability<ISettingsApi?> _settingsCapability = new("settings:nfcore");
 
     public void OnConfigParsed(SpectatorConfig config)
     {
         Config = config;
+        ValidateConfig();
+        InitializeStorage();
+    }
 
+    private void ValidateConfig()
+    {
+        var validStorageTypes = new[] { "playersettings", "mysql", "memory" };
+        if (!validStorageTypes.Contains(Config.Storage.StorageType.ToLower()))
+        {
+            Server.PrintToConsole($"[SpectatorList] Invalid StorageType '{Config.Storage.StorageType}'. Valid options: {string.Join(", ", validStorageTypes)}");
+            Server.PrintToConsole("[SpectatorList] Falling back to 'memory' storage");
+            Config.Storage.StorageType = "memory";
+        }
+    }
+
+    private void InitializeStorage()
+    {
         _displayManager?.Dispose();
-        _displayManager = new DisplayManager(Config, this);
+        _storageService = StorageFactory.CreateStorageService(Config, _settingsApi);
+        _displayManager = new DisplayManager(Config, this, _storageService);
     }
 
     private HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
@@ -47,7 +70,7 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 
     public override void Load(bool hotReload)
     {
-        _displayManager = new DisplayManager(Config, this);
+        InitializeStorage();
 
         foreach (var command in Config.Commands)
         {
@@ -65,6 +88,19 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
         RegisterEventHandler<EventPlayerTeam>(OnPlayerTeam);
     }
 
+    public override void OnAllPluginsLoaded(bool hotReload)
+    {
+        _settingsApi = _settingsCapability.Get();
+
+        if (_settingsApi == null && Config.Storage.StorageType.ToLower() == "playersettings")
+        {
+            Server.PrintToConsole("[SpectatorList] PlayerSettings core not found, but was requested in config.");
+            Server.PrintToConsole("[SpectatorList] Reconfiguring to use fallback storage...");
+        }
+
+        InitializeStorage();
+    }
+
     public override void Unload(bool hotReload)
     {
         _updateTimer?.Kill();
@@ -72,6 +108,7 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 
         _displayManager?.Dispose();
         _displayManager = null;
+        _storageService = null;
     }
 
     private void StartUpdateTimer()
@@ -172,7 +209,7 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
                 Server.PrintToConsole($"[SpectatorList] Error in HandleToggleCommand: {ex.Message}");
                 if (player.IsValid)
                 {
-                    player.PrintToChat($"{Localizer["prefix"]} {Localizer["database_error"]}");
+                    player.PrintToChat($"{Localizer["prefix"]} An error occurred while processing your request");
                 }
             });
         }

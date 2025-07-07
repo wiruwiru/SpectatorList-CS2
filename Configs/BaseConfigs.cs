@@ -20,8 +20,8 @@ namespace SpectatorList.Configs
         [JsonPropertyName("DisplaySettings")]
         public DisplaySettings Display { get; set; } = new();
 
-        [JsonPropertyName("Database")]
-        public DatabaseConfig Database { get; set; } = new DatabaseConfig();
+        [JsonPropertyName("StorageSettings")]
+        public StorageSettings Storage { get; set; } = new();
     }
 
     public class UpdateSettings
@@ -73,6 +73,15 @@ namespace SpectatorList.Configs
 
         [JsonPropertyName("CountColor")]
         public string CountColor { get; set; } = "#87CEEB";
+    }
+
+    public class StorageSettings
+    {
+        [JsonPropertyName("StorageType")]
+        public string StorageType { get; set; } = "PlayerSettings";
+
+        [JsonPropertyName("Database")]
+        public DatabaseConfig Database { get; set; } = new DatabaseConfig();
     }
 
     public class DatabaseConfig

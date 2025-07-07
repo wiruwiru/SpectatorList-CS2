@@ -7,30 +7,27 @@ using SpectatorList.Models;
 
 namespace SpectatorList.Services
 {
-    public class DatabaseService
+    public class DatabaseService : IStorageService
     {
         private readonly SpectatorConfig _config;
         private readonly Dictionary<string, PlayerPreferences> _preferencesCache = new();
+        private readonly HashSet<int> _fallbackDisabledPlayers = new();
         private bool _isInitialized = false;
+        private bool _databaseAvailable = false;
 
         public DatabaseService(SpectatorConfig config)
         {
             _config = config;
         }
 
-        public bool IsEnabled => !string.IsNullOrEmpty(_config.Database.Host) && !string.IsNullOrEmpty(_config.Database.DatabaseName);
+        public bool IsEnabled => !string.IsNullOrEmpty(_config.Storage.Database.Host) &&
+                                !string.IsNullOrEmpty(_config.Storage.Database.DatabaseName);
 
-        public async Task<bool> InitializeDatabase()
+        public async Task<bool> InitializeAsync()
         {
             if (!IsEnabled)
             {
-                await Task.Run(() =>
-                {
-                    Server.NextFrame(() =>
-                    {
-                        Server.PrintToConsole("[SpectatorList] Database is disabled in configuration");
-                    });
-                });
+                Server.PrintToConsole("[SpectatorList] Database configuration is incomplete");
                 return false;
             }
 
@@ -40,26 +37,17 @@ namespace SpectatorList.Services
                 await connection.OpenAsync();
                 await CreateTable(connection);
                 _isInitialized = true;
+                _databaseAvailable = true;
 
-                await Task.Run(() =>
-                {
-                    Server.NextFrame(() =>
-                    {
-                        Server.PrintToConsole("[SpectatorList] Database connection established and table created");
-                    });
-                });
+                Server.PrintToConsole("[SpectatorList] Database connection established and table created");
                 return true;
             }
             catch (Exception ex)
             {
                 _isInitialized = false;
-                await Task.Run(() =>
-                {
-                    Server.NextFrame(() =>
-                    {
-                        Server.PrintToConsole($"[SpectatorList] Failed to initialize database: {ex.Message}");
-                    });
-                });
+                _databaseAvailable = false;
+                Server.PrintToConsole($"[SpectatorList] Failed to initialize database: {ex.Message}");
+                Server.PrintToConsole("[SpectatorList] Falling back to memory storage for this session");
                 return false;
             }
         }
@@ -77,9 +65,95 @@ namespace SpectatorList.Services
             await cmd.ExecuteNonQueryAsync();
         }
 
-        public async Task<PlayerPreferences?> LoadPlayerPreferences(string steamId)
+        public bool IsPlayerDisplayEnabled(CCSPlayerController player)
         {
-            if (!IsEnabled || !_isInitialized)
+            if (!_databaseAvailable)
+            {
+                return !_fallbackDisabledPlayers.Contains(player.Slot);
+            }
+
+            var cachedPrefs = GetCachedPlayerPreferences(player.SteamID.ToString());
+            if (cachedPrefs != null)
+            {
+                return cachedPrefs.DisplayEnabled;
+            }
+
+            _ = LoadPlayerPreferencesAsync(player);
+            return true;
+        }
+
+        public async Task<bool> IsPlayerDisplayEnabledAsync(CCSPlayerController player)
+        {
+            if (!_databaseAvailable)
+            {
+                return !_fallbackDisabledPlayers.Contains(player.Slot);
+            }
+
+            try
+            {
+                var steamId = player.SteamID.ToString();
+                var preferences = await LoadOrCreatePlayerPreferences(steamId);
+                return preferences.DisplayEnabled;
+            }
+            catch (Exception ex)
+            {
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole($"[SpectatorList] Error loading preferences for {player.PlayerName}: {ex.Message}");
+                });
+                return !_fallbackDisabledPlayers.Contains(player.Slot);
+            }
+        }
+
+        public void TogglePlayerDisplay(CCSPlayerController player)
+        {
+            if (!_databaseAvailable)
+            {
+                if (_fallbackDisabledPlayers.Contains(player.Slot))
+                {
+                    _fallbackDisabledPlayers.Remove(player.Slot);
+                }
+                else
+                {
+                    _fallbackDisabledPlayers.Add(player.Slot);
+                }
+                return;
+            }
+
+            _ = TogglePlayerDisplayAsync(player);
+        }
+
+        public async Task TogglePlayerDisplayAsync(CCSPlayerController player)
+        {
+            if (!_databaseAvailable)
+            {
+                Server.NextFrame(() => TogglePlayerDisplay(player));
+                return;
+            }
+
+            try
+            {
+                var steamId = player.SteamID.ToString();
+                var preferences = await LoadOrCreatePlayerPreferences(steamId);
+
+                preferences.DisplayEnabled = !preferences.DisplayEnabled;
+                preferences.LastUpdated = DateTime.Now;
+
+                await SavePlayerPreferences(preferences);
+            }
+            catch (Exception ex)
+            {
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole($"[SpectatorList] Error toggling display for {player.PlayerName}: {ex.Message}");
+                    TogglePlayerDisplay(player);
+                });
+            }
+        }
+
+        private async Task<PlayerPreferences?> LoadPlayerPreferences(string steamId)
+        {
+            if (!IsEnabled || !_isInitialized || !_databaseAvailable)
                 return null;
 
             try
@@ -118,20 +192,15 @@ namespace SpectatorList.Services
             }
             catch (Exception ex)
             {
-                await Task.Run(() =>
-                {
-                    Server.NextFrame(() =>
-                    {
-                        Server.PrintToConsole($"[SpectatorList] Error loading player preferences for SteamID {steamId}: {ex.Message}");
-                    });
-                });
+                Server.PrintToConsole($"[SpectatorList] Error loading player preferences for SteamID {steamId}: {ex.Message}");
+                _databaseAvailable = false;
                 return null;
             }
         }
 
-        public async Task<bool> SavePlayerPreferences(PlayerPreferences preferences)
+        private async Task<bool> SavePlayerPreferences(PlayerPreferences preferences)
         {
-            if (!IsEnabled || !_isInitialized)
+            if (!IsEnabled || !_isInitialized || !_databaseAvailable)
                 return false;
 
             try
@@ -158,18 +227,13 @@ namespace SpectatorList.Services
             }
             catch (Exception ex)
             {
-                await Task.Run(() =>
-                {
-                    Server.NextFrame(() =>
-                    {
-                        Server.PrintToConsole($"[SpectatorList] Error saving player preferences for SteamID {preferences.SteamId}: {ex.Message}");
-                    });
-                });
+                Server.PrintToConsole($"[SpectatorList] Error saving player preferences for SteamID {preferences.SteamId}: {ex.Message}");
+                _databaseAvailable = false;
                 return false;
             }
         }
 
-        public async Task<PlayerPreferences> LoadOrCreatePlayerPreferences(string steamId)
+        private async Task<PlayerPreferences> LoadOrCreatePlayerPreferences(string steamId)
         {
             var preferences = await LoadPlayerPreferences(steamId);
             if (preferences == null)
@@ -181,13 +245,26 @@ namespace SpectatorList.Services
                     LastUpdated = DateTime.Now
                 };
 
-                if (IsEnabled && _isInitialized)
+                if (IsEnabled && _isInitialized && _databaseAvailable)
                 {
                     await SavePlayerPreferences(preferences);
                 }
             }
 
             return preferences;
+        }
+
+        private async Task LoadPlayerPreferencesAsync(CCSPlayerController player)
+        {
+            try
+            {
+                var steamId = player.SteamID.ToString();
+                await LoadOrCreatePlayerPreferences(steamId);
+            }
+            catch (Exception ex)
+            {
+                Server.PrintToConsole($"[SpectatorList] Error loading preferences for {player.PlayerName}: {ex.Message}");
+            }
         }
 
         public void CachePlayerPreferences(string steamId, PlayerPreferences preferences)
@@ -200,30 +277,32 @@ namespace SpectatorList.Services
             return _preferencesCache.TryGetValue(steamId, out var preferences) ? preferences : null;
         }
 
-        public void RemoveFromCache(string steamId)
+        public void OnPlayerDisconnect(CCSPlayerController player)
         {
-            _preferencesCache.Remove(steamId);
+            _preferencesCache.Remove(player.SteamID.ToString());
+            _fallbackDisabledPlayers.Remove(player.Slot);
         }
 
         public void ClearCache()
         {
             _preferencesCache.Clear();
+            _fallbackDisabledPlayers.Clear();
         }
 
         private MySqlConnection GetConnection()
         {
-            if (_config.Database == null)
+            if (_config.Storage.Database == null)
             {
                 throw new InvalidOperationException("Database configuration is null");
             }
 
             var builder = new MySqlConnectionStringBuilder
             {
-                Server = _config.Database.Host,
-                Port = _config.Database.Port,
-                UserID = _config.Database.User,
-                Database = _config.Database.DatabaseName,
-                Password = _config.Database.Password,
+                Server = _config.Storage.Database.Host,
+                Port = _config.Storage.Database.Port,
+                UserID = _config.Storage.Database.User,
+                Database = _config.Storage.Database.DatabaseName,
+                Password = _config.Storage.Database.Password,
                 Pooling = true,
                 SslMode = MySqlSslMode.Preferred
             };
@@ -244,15 +323,17 @@ namespace SpectatorList.Services
             }
             catch (Exception ex)
             {
-                await Task.Run(() =>
-                {
-                    Server.NextFrame(() =>
-                    {
-                        Server.PrintToConsole($"[SpectatorList] Database connection test failed: {ex.Message}");
-                    });
-                });
+                Server.PrintToConsole($"[SpectatorList] Database connection test failed: {ex.Message}");
                 return false;
             }
+        }
+
+        public string GetStorageType()
+        {
+            if (_databaseAvailable)
+                return "MySQL Database";
+            else
+                return "Memory (Database Unavailable)";
         }
     }
 }

@@ -5,17 +5,43 @@ Shows real-time spectators both in chat messages and on-screen display with cust
 
 ---
 
-### Installation
+## 🚀 Installation
+
+### Basic Installation
 1. Install [CounterStrike Sharp](https://github.com/roflmuffin/CounterStrikeSharp) and [Metamod:Source](https://www.sourcemm.net/downloads.php/?branch=master)
 2. Download [SpectatorList.zip](https://github.com/wiruwiru/SpectatorList-CS2/releases/latest) from releases
 3. Extract and upload to your game server
 4. Start server and configure the generated config file
-5. (Optional) Configure MySQL database for persistent user preferences
+
+### Optional Dependencies (for PlayerSettings storage)
+If you want to use `PlayerSettings` storage type:
+2. Install [PlayerSettingsCS2](https://github.com/NickFox007/PlayerSettingsCS2/releases/latest)  (required dependency)
+1. Install [AnyBaseLibCS2](https://github.com/NickFox007/AnyBaseLibCS2/releases/latest)  (required for PlayerSettings)
+3. Set `StorageType` to `"PlayerSettings"` in your config
+
+### Optional Dependencies (for MySQL storage)
+If you want to use `MySQL` storage type:
+1. Configure your MySQL database
+2. Set `StorageType` to `"MySQL"` in your config
+3. Fill in the database connection details
 
 ---
 
-### Main Configuration Parameters
+## ⚙️ Storage Options
 
+The plugin supports three different storage methods for user preferences:
+
+| Storage Type | Description | Persistence | Performance | Dependencies |
+|--------------|-------------|-------------|-------------|--------------|
+| **PlayerSettings** | Uses PlayerSettings plugin | ✅ Persistent | ⚡ Fast | PlayerSettingsCS2 + AnyBaseLibCS2 |
+| **MySQL** | Traditional database storage | ✅ Persistent | 🔄 Database queries | MySQL Server |
+| **Memory** | Temporary in-memory storage | ❌ Lost on restart | ⚡⚡ Fastest | None |
+
+**Recommendation**: Use `PlayerSettings` for most servers, `MySQL` if you don't care about the number of active pool connections, and `Memory` for testing.
+
+---
+
+## 📋 Main Configuration Parameters
 | Parameter            | Description                                                                                       | Required |
 |----------------------|---------------------------------------------------------------------------------------------------|----------|
 | `Commands`           | List of chat commands players can use to toggle spectator list display. (**Default**: `["css_speclist", "css_specs", "css_spectators"]`) | **YES**  |
@@ -23,10 +49,15 @@ Shows real-time spectators both in chat messages and on-screen display with cust
 | `CanViewList`        | Permission flag required to view spectator lists (both chat and screen). Leave empty for all players. (**Default**: `""`) | **YES**  |
 | `UpdateSettings`     | Configuration for automatic updates and periodic displays. | **YES**  |
 | `DisplaySettings`    | Configuration for how spectator lists are displayed. | **YES**  |
-| `Database`           | MySQL database configuration for persistent user preferences. | **NO**   |
+| `StorageSettings`    | Configuration for user preference storage method. | **YES**  |
+
+### Storage Settings Parameters
+| Parameter         | Description                                                                                         | Required |
+|-------------------|-----------------------------------------------------------------------------------------------------|----------|
+| `StorageType`     | Storage method to use: `"PlayerSettings"`, `"MySQL"`, or `"Memory"`. (**Default**: `"PlayerSettings"`) | **YES**  |
+| `Database`        | MySQL database configuration (only used when `StorageType` is `"MySQL"`). | **NO**   |
 
 ### Update Settings Parameters
-
 | Parameter         | Description                                                                                         | Required |
 |-------------------|-----------------------------------------------------------------------------------------------------|----------|
 | `CheckInterval`   | How often (in seconds) to check for spectator changes. (**Default**: `2.0`) | **YES**  |
@@ -35,7 +66,6 @@ Shows real-time spectators both in chat messages and on-screen display with cust
 | `PeriodicInterval` | Interval (in seconds) for periodic displays when `ShowPeriodic` is enabled. (**Default**: `5.0`) | **YES**  |
 
 ### Display Settings Parameters
-
 | Parameter         | Description                                                                                         | Required |
 |-------------------|-----------------------------------------------------------------------------------------------------|----------|
 | `ExclusionFlag`   | Players with this flag will be hidden from spectator lists. (**Default**: `"@css/generic"`) | **YES**  |
@@ -45,7 +75,6 @@ Shows real-time spectators both in chat messages and on-screen display with cust
 | `ScreenViewSettings` | Configuration for on-screen display positioning and appearance. | **YES**  |
 
 ### Screen View Settings Parameters
-
 | Parameter         | Description                                                                                         | Required |
 |-------------------|-----------------------------------------------------------------------------------------------------|----------|
 | `PositionX`       | Horizontal position offset for on-screen display. (**Default**: `-8.0`) | **YES**  |
@@ -55,17 +84,17 @@ Shows real-time spectators both in chat messages and on-screen display with cust
 | `CountColor`      | Hex color code for spectator count. (**Default**: `"#87CEEB"`) | **YES**  |
 
 ### Database Settings Parameters
-
+*(Only used when `StorageType` is set to `"MySQL"`)*
 | Parameter         | Description                                                                                         | Required |
 |-------------------|-----------------------------------------------------------------------------------------------------|----------|
-| `Host`            | MySQL server hostname or IP address. Leave empty to disable database. (**Default**: `""`) | **NO**   |
+| `Host`            | MySQL server hostname or IP address. (**Default**: `"localhost"`) | **NO**   |
 | `Port`            | MySQL server port. (**Default**: `3306`) | **NO**   |
-| `User`            | MySQL username for database connection. (**Default**: `""`) | **NO**   |
+| `User`            | MySQL username for database connection. (**Default**: `"root"`) | **NO**   |
 | `Password`        | MySQL password for database connection. (**Default**: `""`) | **NO**   |
-| `DatabaseName`    | Name of the MySQL database to use. Leave empty to disable database. (**Default**: `""`) | **NO**   |
+| `DatabaseName`    | Name of the MySQL database to use. (**Default**: `""`) | **NO**   |
 
 ---
 
-## Support
+## 📊 Support
 
 For issues, questions, or feature requests, please visit our [GitHub Issues](https://github.com/wiruwiru/SpectatorList-CS2/issues) page.

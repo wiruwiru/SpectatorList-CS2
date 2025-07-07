@@ -11,87 +11,65 @@ namespace SpectatorList.Managers
     public class DisplayManager : IDisposable
     {
         private readonly Dictionary<int, ScreenViewDisplay> _screenDisplays;
-        private readonly HashSet<int> _disabledPlayers;
         private readonly SpectatorConfig _config;
         private readonly BasePlugin _plugin;
-        private readonly DatabaseService _databaseService;
+        private readonly IStorageService _storageService;
 
-        public DisplayManager(SpectatorConfig config, BasePlugin plugin)
+        public DisplayManager(SpectatorConfig config, BasePlugin plugin, IStorageService storageService)
         {
             _config = config;
             _plugin = plugin;
+            _storageService = storageService;
             _screenDisplays = new Dictionary<int, ScreenViewDisplay>();
-            _disabledPlayers = new HashSet<int>();
-            _databaseService = new DatabaseService(config);
 
-            if (_databaseService.IsEnabled)
-            {
-                _ = InitializeDatabaseAsync();
-            }
+            _ = InitializeStorageAsync();
         }
 
-        private async Task InitializeDatabaseAsync()
+        private async Task InitializeStorageAsync()
         {
             try
             {
-                await _databaseService.InitializeDatabase();
+                var success = await _storageService.InitializeAsync();
+                var storageType = _storageService.GetStorageType();
+
+                if (success)
+                {
+                    Server.PrintToConsole($"[SpectatorList] Storage initialized successfully: {storageType}");
+                }
+                else
+                {
+                    Server.PrintToConsole($"[SpectatorList] Storage initialization failed, using: {storageType}");
+                }
             }
             catch (Exception ex)
             {
-                Server.PrintToConsole($"[SpectatorList] Error initializing database: {ex.Message}");
+                Server.PrintToConsole($"[SpectatorList] Error initializing storage: {ex.Message}");
             }
         }
 
         public async Task<bool> IsPlayerDisplayEnabledAsync(CCSPlayerController player)
         {
-            if (_databaseService.IsEnabled)
+            try
             {
-                try
-                {
-                    var steamId = player.SteamID.ToString();
-                    var preferences = await _databaseService.LoadOrCreatePlayerPreferences(steamId);
-                    return preferences.DisplayEnabled;
-                }
-                catch (Exception ex)
-                {
-                    Server.NextFrame(() =>
-                    {
-                        Server.PrintToConsole($"[SpectatorList] Error loading preferences for {player.PlayerName}: {ex.Message}");
-                    });
-                    return !_disabledPlayers.Contains(player.Slot);
-                }
+                return await _storageService.IsPlayerDisplayEnabledAsync(player);
             }
-
-            return !_disabledPlayers.Contains(player.Slot);
+            catch (Exception ex)
+            {
+                Server.PrintToConsole($"[SpectatorList] Error checking display status for {player.PlayerName}: {ex.Message}");
+                return true;
+            }
         }
 
         public bool IsPlayerDisplayEnabled(CCSPlayerController player)
         {
-            if (_databaseService.IsEnabled)
-            {
-                var cachedPrefs = _databaseService.GetCachedPlayerPreferences(player.SteamID.ToString());
-                if (cachedPrefs != null)
-                {
-                    return cachedPrefs.DisplayEnabled;
-                }
-
-                _ = LoadPlayerPreferencesAsync(player);
-                return true;
-            }
-
-            return !_disabledPlayers.Contains(player.Slot);
-        }
-
-        private async Task LoadPlayerPreferencesAsync(CCSPlayerController player)
-        {
             try
             {
-                var steamId = player.SteamID.ToString();
-                await _databaseService.LoadOrCreatePlayerPreferences(steamId);
+                return _storageService.IsPlayerDisplayEnabled(player);
             }
             catch (Exception ex)
             {
-                Server.PrintToConsole($"[SpectatorList] Error loading preferences for {player.PlayerName}: {ex.Message}");
+                Server.PrintToConsole($"[SpectatorList] Error checking display status for {player.PlayerName}: {ex.Message}");
+                return true;
             }
         }
 
@@ -105,60 +83,37 @@ namespace SpectatorList.Managers
 
         public async Task TogglePlayerDisplayAsync(CCSPlayerController player)
         {
-            if (_databaseService.IsEnabled)
+            try
             {
-                try
+                await _storageService.TogglePlayerDisplayAsync(player);
+
+                var isEnabled = await _storageService.IsPlayerDisplayEnabledAsync(player);
+                if (!isEnabled)
                 {
-                    var steamId = player.SteamID.ToString();
-                    var preferences = await _databaseService.LoadOrCreatePlayerPreferences(steamId);
-
-                    preferences.DisplayEnabled = !preferences.DisplayEnabled;
-                    preferences.LastUpdated = DateTime.Now;
-
-                    await _databaseService.SavePlayerPreferences(preferences);
-
-                    if (!preferences.DisplayEnabled)
-                    {
-                        Server.NextFrame(() => CleanupPlayerDisplay(player));
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Server.NextFrame(() =>
-                    {
-                        Server.PrintToConsole($"[SpectatorList] Error toggling display for {player.PlayerName}: {ex.Message}");
-                    });
-                    Server.NextFrame(() => TogglePlayerDisplayMemory(player));
+                    Server.NextFrame(() => CleanupPlayerDisplay(player));
                 }
             }
-            else
+            catch (Exception ex)
             {
-                Server.NextFrame(() => TogglePlayerDisplayMemory(player));
+                Server.PrintToConsole($"[SpectatorList] Error toggling display for {player.PlayerName}: {ex.Message}");
             }
         }
 
         public void TogglePlayerDisplay(CCSPlayerController player)
         {
-            if (_databaseService.IsEnabled)
+            try
             {
-                _ = TogglePlayerDisplayAsync(player);
-            }
-            else
-            {
-                TogglePlayerDisplayMemory(player);
-            }
-        }
+                _storageService.TogglePlayerDisplay(player);
 
-        private void TogglePlayerDisplayMemory(CCSPlayerController player)
-        {
-            if (_disabledPlayers.Contains(player.Slot))
-            {
-                _disabledPlayers.Remove(player.Slot);
+                var isEnabled = _storageService.IsPlayerDisplayEnabled(player);
+                if (!isEnabled)
+                {
+                    CleanupPlayerDisplay(player);
+                }
             }
-            else
+            catch (Exception ex)
             {
-                _disabledPlayers.Add(player.Slot);
-                CleanupPlayerDisplay(player);
+                Server.PrintToConsole($"[SpectatorList] Error toggling display for {player.PlayerName}: {ex.Message}");
             }
         }
 
@@ -338,19 +293,13 @@ namespace SpectatorList.Managers
         public void OnPlayerDisconnect(CCSPlayerController player)
         {
             CleanupPlayerDisplay(player);
-            _disabledPlayers.Remove(player.Slot);
-
-            if (_databaseService.IsEnabled)
-            {
-                _databaseService.RemoveFromCache(player.SteamID.ToString());
-            }
+            _storageService.OnPlayerDisconnect(player);
         }
 
         public void Dispose()
         {
             CleanupAllDisplays();
-            _disabledPlayers.Clear();
-            _databaseService.ClearCache();
+            _storageService.ClearCache();
         }
     }
 }
