@@ -98,25 +98,90 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
             return;
         }
 
-        _displayManager?.TogglePlayerDisplay(player);
-
-        bool isEnabled = _displayManager?.IsPlayerDisplayEnabled(player) ?? false;
-        string message = isEnabled ? Localizer["spectator_display_enabled"] : Localizer["spectator_display_disabled"];
-
-        commandInfo.ReplyToCommand($"{Localizer["prefix"]} {message}");
-
-        if (isEnabled)
+        if (_displayManager == null)
         {
-            var spectators = GetPlayersSpectating(player);
-            if (spectators.Count > 0)
+            commandInfo.ReplyToCommand($"{Localizer["prefix"]} Display manager not initialized");
+            return;
+        }
+
+        _ = HandleToggleCommand(player, commandInfo);
+    }
+
+    private async Task HandleToggleCommand(CCSPlayerController player, CommandInfo commandInfo)
+    {
+        try
+        {
+            if (_displayManager == null)
             {
-                _displayManager?.DisplaySpectatorList(player, spectators);
+                Server.NextFrame(() =>
+                {
+                    if (player.IsValid)
+                    {
+                        player.PrintToChat($"{Localizer["prefix"]} Display manager not initialized");
+                    }
+                });
+                return;
             }
+
+            await _displayManager.TogglePlayerDisplayAsync(player);
+
+            bool isEnabled = await _displayManager.IsPlayerDisplayEnabledAsync(player);
+            string message = isEnabled ? Localizer["spectator_display_enabled"] : Localizer["spectator_display_disabled"];
+
+            Server.NextFrame(() =>
+            {
+                try
+                {
+                    if (player.IsValid)
+                    {
+                        player.PrintToChat($"{Localizer["prefix"]} {message}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Server.PrintToConsole($"[SpectatorList] Error sending response: {ex.Message}");
+                }
+            });
+
+            if (isEnabled)
+            {
+                Server.NextFrame(() =>
+                {
+                    try
+                    {
+                        if (player.IsValid && _displayManager != null)
+                        {
+                            var spectators = GetPlayersSpectating(player);
+                            if (spectators.Count > 0)
+                            {
+                                _ = _displayManager.DisplaySpectatorListAsync(player, spectators);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Server.PrintToConsole($"[SpectatorList] Error displaying spectators: {ex.Message}");
+                    }
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            Server.NextFrame(() =>
+            {
+                Server.PrintToConsole($"[SpectatorList] Error in HandleToggleCommand: {ex.Message}");
+                if (player.IsValid)
+                {
+                    player.PrintToChat($"{Localizer["prefix"]} {Localizer["database_error"]}");
+                }
+            });
         }
     }
 
     private void CheckAndUpdateSpectatorLists()
     {
+        if (_displayManager == null) return;
+
         var alivePlayers = Utilities.GetPlayers().Where(p => p.IsValid && p.PawnIsAlive).ToList();
 
         foreach (var player in alivePlayers)
@@ -141,11 +206,11 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
             {
                 if (currentSpectators.Count > 0)
                 {
-                    _displayManager?.DisplaySpectatorList(player, currentSpectators);
+                    _ = _displayManager.DisplaySpectatorListAsync(player, currentSpectators);
                 }
                 else
                 {
-                    _displayManager?.CleanupPlayerDisplay(player);
+                    _displayManager.CleanupPlayerDisplay(player);
                 }
             }
         }
@@ -159,12 +224,14 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 
         if (Config.Update.ShowPeriodic)
         {
-            ShowPeriodicSpectatorLists();
+            _ = ShowPeriodicSpectatorLists();
         }
     }
 
-    private void ShowPeriodicSpectatorLists()
+    private async Task ShowPeriodicSpectatorLists()
     {
+        if (_displayManager == null) return;
+
         bool ShouldShowPeriodic()
         {
             return Server.CurrentTime % Config.Update.PeriodicInterval < Config.Update.CheckInterval;
@@ -174,13 +241,27 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
             return;
 
         var alivePlayers = Utilities.GetPlayers().Where(p => p.IsValid && p.PawnIsAlive).ToList();
+        var tasks = new List<Task>();
+
         foreach (var player in alivePlayers)
         {
             var spectators = GetPlayersSpectating(player);
             if (spectators.Count > 0)
             {
-                _displayManager?.DisplaySpectatorList(player, spectators);
+                tasks.Add(_displayManager.DisplaySpectatorListAsync(player, spectators));
             }
+        }
+
+        try
+        {
+            await Task.WhenAll(tasks);
+        }
+        catch (Exception ex)
+        {
+            Server.NextFrame(() =>
+            {
+                Server.PrintToConsole($"[SpectatorList] Error in ShowPeriodicSpectatorLists: {ex.Message}");
+            });
         }
     }
 
@@ -287,26 +368,31 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 
     private void UpdateAllSpectatorLists()
     {
+        if (_displayManager == null) return;
+
         var alivePlayers = Utilities.GetPlayers().Where(p => p.IsValid && p.PawnIsAlive).ToList();
         var allPlayers = Utilities.GetPlayers().Where(p => p.IsValid).ToList();
+
         foreach (var player in allPlayers)
         {
             if (!player.PawnIsAlive)
             {
-                _displayManager?.CleanupPlayerDisplay(player);
+                _displayManager.CleanupPlayerDisplay(player);
             }
         }
+
+        var tasks = new List<Task>();
 
         foreach (var player in alivePlayers)
         {
             var currentSpectators = GetPlayersSpectating(player);
             if (currentSpectators.Count > 0)
             {
-                _displayManager?.DisplaySpectatorList(player, currentSpectators);
+                tasks.Add(_displayManager.DisplaySpectatorListAsync(player, currentSpectators));
             }
             else
             {
-                _displayManager?.CleanupPlayerDisplay(player);
+                _displayManager.CleanupPlayerDisplay(player);
             }
 
             var currentSpectatorNames = currentSpectators.Select(s => s.PlayerName).ToList();
@@ -318,6 +404,20 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
         foreach (var slot in slotsToRemove)
         {
             _lastSpectatorLists.Remove(slot);
+        }
+
+        if (tasks.Count > 0)
+        {
+            _ = Task.WhenAll(tasks).ContinueWith(t =>
+            {
+                if (t.IsFaulted && t.Exception != null)
+                {
+                    Server.NextFrame(() =>
+                    {
+                        Server.PrintToConsole($"[SpectatorList] Error in UpdateAllSpectatorLists: {t.Exception.Message}");
+                    });
+                }
+            });
         }
     }
 }

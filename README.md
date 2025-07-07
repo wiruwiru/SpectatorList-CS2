@@ -10,6 +10,7 @@ Shows real-time spectators both in chat messages and on-screen display with cust
 2. Download [SpectatorList.zip](https://github.com/wiruwiru/SpectatorList-CS2/releases/latest) from releases
 3. Extract and upload to your game server
 4. Start server and configure the generated config file
+5. (Optional) Configure MySQL database for persistent user preferences
 
 ---
 
@@ -22,6 +23,7 @@ Shows real-time spectators both in chat messages and on-screen display with cust
 | `CanViewList`        | Permission flag required to view spectator lists (both chat and screen). Leave empty for all players. (**Default**: `""`) | **YES**  |
 | `UpdateSettings`     | Configuration for automatic updates and periodic displays. | **YES**  |
 | `DisplaySettings`    | Configuration for how spectator lists are displayed. | **YES**  |
+| `Database`           | MySQL database configuration for persistent user preferences. | **NO**   |
 
 ### Update Settings Parameters
 
@@ -51,6 +53,16 @@ Shows real-time spectators both in chat messages and on-screen display with cust
 | `TitleColor`      | Hex color code for the spectator list title. (**Default**: `"#FFD700"`) | **YES**  |
 | `PlayerNameColor` | Hex color code for spectator names. (**Default**: `"#FFFFFF"`) | **YES**  |
 | `CountColor`      | Hex color code for spectator count. (**Default**: `"#87CEEB"`) | **YES**  |
+
+### Database Settings Parameters
+
+| Parameter         | Description                                                                                         | Required |
+|-------------------|-----------------------------------------------------------------------------------------------------|----------|
+| `Host`            | MySQL server hostname or IP address. Leave empty to disable database. (**Default**: `""`) | **NO**   |
+| `Port`            | MySQL server port. (**Default**: `3306`) | **NO**   |
+| `User`            | MySQL username for database connection. (**Default**: `""`) | **NO**   |
+| `Password`        | MySQL password for database connection. (**Default**: `""`) | **NO**   |
+| `DatabaseName`    | Name of the MySQL database to use. Leave empty to disable database. (**Default**: `""`) | **NO**   |
 
 ---
 

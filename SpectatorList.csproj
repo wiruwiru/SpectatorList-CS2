@@ -10,7 +10,12 @@
 
     <ItemGroup>
       <PackageReference Include="CounterStrikeSharp.API" Version="1.0.318" />
+      <PackageReference Include="MysqlConnector" Version="2.4.0" />
+    </ItemGroup>
+
+    <ItemGroup>
       <None Update="lang\**\*.*" CopyToOutputDirectory="PreserveNewest" />
+      <None Update="MySqlConnector.dll" CopyToOutputDirectory="PreserveNewest" />
     </ItemGroup>
 
 </Project>
