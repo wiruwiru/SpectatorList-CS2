@@ -20,14 +20,16 @@ namespace SpectatorList.Services
             _config = config;
         }
 
-        public bool IsEnabled => !string.IsNullOrEmpty(_config.Storage.Database.Host) &&
-                                !string.IsNullOrEmpty(_config.Storage.Database.DatabaseName);
+        public bool IsEnabled => !string.IsNullOrEmpty(_config.Storage.Database.Host) && !string.IsNullOrEmpty(_config.Storage.Database.DatabaseName);
 
         public async Task<bool> InitializeAsync()
         {
             if (!IsEnabled)
             {
-                Server.PrintToConsole("[SpectatorList] Database configuration is incomplete");
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole("[SpectatorList] Database configuration is incomplete");
+                });
                 return false;
             }
 
@@ -39,15 +41,23 @@ namespace SpectatorList.Services
                 _isInitialized = true;
                 _databaseAvailable = true;
 
-                Server.PrintToConsole("[SpectatorList] Database connection established and table created");
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole("[SpectatorList] Database connection established and table created");
+                });
                 return true;
             }
             catch (Exception ex)
             {
                 _isInitialized = false;
                 _databaseAvailable = false;
-                Server.PrintToConsole($"[SpectatorList] Failed to initialize database: {ex.Message}");
-                Server.PrintToConsole("[SpectatorList] Falling back to memory storage for this session");
+
+                var errorMessage = ex.Message;
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole($"[SpectatorList] Failed to initialize database: {errorMessage}");
+                    Server.PrintToConsole("[SpectatorList] Falling back to memory storage for this session");
+                });
                 return false;
             }
         }
@@ -97,9 +107,12 @@ namespace SpectatorList.Services
             }
             catch (Exception ex)
             {
+                var playerName = player.PlayerName;
+                var errorMessage = ex.Message;
+
                 Server.NextFrame(() =>
                 {
-                    Server.PrintToConsole($"[SpectatorList] Error loading preferences for {player.PlayerName}: {ex.Message}");
+                    Server.PrintToConsole($"[SpectatorList] Error loading preferences for {playerName}: {errorMessage}");
                 });
                 return !_fallbackDisabledPlayers.Contains(player.Slot);
             }
@@ -143,9 +156,12 @@ namespace SpectatorList.Services
             }
             catch (Exception ex)
             {
+                var playerName = player.PlayerName;
+                var errorMessage = ex.Message;
+
                 Server.NextFrame(() =>
                 {
-                    Server.PrintToConsole($"[SpectatorList] Error toggling display for {player.PlayerName}: {ex.Message}");
+                    Server.PrintToConsole($"[SpectatorList] Error toggling display for {playerName}: {errorMessage}");
                     TogglePlayerDisplay(player);
                 });
             }
@@ -192,7 +208,12 @@ namespace SpectatorList.Services
             }
             catch (Exception ex)
             {
-                Server.PrintToConsole($"[SpectatorList] Error loading player preferences for SteamID {steamId}: {ex.Message}");
+                var errorMessage = ex.Message;
+
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole($"[SpectatorList] Error loading player preferences for SteamID {steamId}: {errorMessage}");
+                });
                 _databaseAvailable = false;
                 return null;
             }
@@ -227,7 +248,13 @@ namespace SpectatorList.Services
             }
             catch (Exception ex)
             {
-                Server.PrintToConsole($"[SpectatorList] Error saving player preferences for SteamID {preferences.SteamId}: {ex.Message}");
+                var steamId = preferences.SteamId;
+                var errorMessage = ex.Message;
+
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole($"[SpectatorList] Error saving player preferences for SteamID {steamId}: {errorMessage}");
+                });
                 _databaseAvailable = false;
                 return false;
             }
@@ -263,7 +290,13 @@ namespace SpectatorList.Services
             }
             catch (Exception ex)
             {
-                Server.PrintToConsole($"[SpectatorList] Error loading preferences for {player.PlayerName}: {ex.Message}");
+                var playerName = player.PlayerName;
+                var errorMessage = ex.Message;
+
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole($"[SpectatorList] Error loading preferences for {playerName}: {errorMessage}");
+                });
             }
         }
 
@@ -323,7 +356,11 @@ namespace SpectatorList.Services
             }
             catch (Exception ex)
             {
-                Server.PrintToConsole($"[SpectatorList] Database connection test failed: {ex.Message}");
+                var errorMessage = ex.Message;
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole($"[SpectatorList] Database connection test failed: {errorMessage}");
+                });
                 return false;
             }
         }

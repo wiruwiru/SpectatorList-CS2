@@ -295,9 +295,10 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
         }
         catch (Exception ex)
         {
+            var errorMessage = ex.Message;
             Server.NextFrame(() =>
             {
-                Server.PrintToConsole($"[SpectatorList] Error in ShowPeriodicSpectatorLists: {ex.Message}");
+                Server.PrintToConsole($"[SpectatorList] Error in ShowPeriodicSpectatorLists: {errorMessage}");
             });
         }
     }

@@ -32,18 +32,25 @@ namespace SpectatorList.Managers
                 var success = await _storageService.InitializeAsync();
                 var storageType = _storageService.GetStorageType();
 
-                if (success)
+                Server.NextFrame(() =>
                 {
-                    Server.PrintToConsole($"[SpectatorList] Storage initialized successfully: {storageType}");
-                }
-                else
-                {
-                    Server.PrintToConsole($"[SpectatorList] Storage initialization failed, using: {storageType}");
-                }
+                    if (success)
+                    {
+                        Server.PrintToConsole($"[SpectatorList] Storage initialized successfully: {storageType}");
+                    }
+                    else
+                    {
+                        Server.PrintToConsole($"[SpectatorList] Storage initialization failed, using: {storageType}");
+                    }
+                });
             }
             catch (Exception ex)
             {
-                Server.PrintToConsole($"[SpectatorList] Error initializing storage: {ex.Message}");
+                var errorMessage = ex.Message;
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole($"[SpectatorList] Error initializing storage: {errorMessage}");
+                });
             }
         }
 
@@ -55,7 +62,13 @@ namespace SpectatorList.Managers
             }
             catch (Exception ex)
             {
-                Server.PrintToConsole($"[SpectatorList] Error checking display status for {player.PlayerName}: {ex.Message}");
+                var playerName = player.PlayerName;
+                var errorMessage = ex.Message;
+
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole($"[SpectatorList] Error checking display status for {playerName}: {errorMessage}");
+                });
                 return true;
             }
         }
@@ -68,7 +81,10 @@ namespace SpectatorList.Managers
             }
             catch (Exception ex)
             {
-                Server.PrintToConsole($"[SpectatorList] Error checking display status for {player.PlayerName}: {ex.Message}");
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole($"[SpectatorList] Error checking display status for {player.PlayerName}: {ex.Message}");
+                });
                 return true;
             }
         }
@@ -95,7 +111,13 @@ namespace SpectatorList.Managers
             }
             catch (Exception ex)
             {
-                Server.PrintToConsole($"[SpectatorList] Error toggling display for {player.PlayerName}: {ex.Message}");
+                var playerName = player.PlayerName;
+                var errorMessage = ex.Message;
+
+                Server.NextFrame(() =>
+                {
+                    Server.PrintToConsole($"[SpectatorList] Error toggling display for {playerName}: {errorMessage}");
+                });
             }
         }
 
@@ -140,9 +162,10 @@ namespace SpectatorList.Managers
                         filteredList.Add(spectator);
                     }
 
+                    var errorMessage = ex.Message;
                     Server.NextFrame(() =>
                     {
-                        Server.PrintToConsole($"[SpectatorList] Error checking permissions for spectator: {ex.Message}");
+                        Server.PrintToConsole($"[SpectatorList] Error checking permissions for spectator: {errorMessage}");
                     });
                 }
             }
