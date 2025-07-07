@@ -14,7 +14,7 @@ namespace SpectatorList;
 public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 {
     public override string ModuleName => "SpectatorList";
-    public override string ModuleVersion => "1.0.1";
+    public override string ModuleVersion => "1.0.2";
     public override string ModuleAuthor => "luca.uy";
     public override string ModuleDescription => "Toggle spectator list display via chat messages with ScreenView support and exclusion flags";
 
@@ -34,6 +34,14 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
     private HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
     {
         _displayManager?.CleanupAllDisplays();
+        _lastSpectatorLists.Clear();
+        return HookResult.Continue;
+    }
+
+    private HookResult OnRoundStart(EventRoundStart @event, GameEventInfo info)
+    {
+        _displayManager?.CleanupAllDisplays();
+        _lastSpectatorLists.Clear();
         return HookResult.Continue;
     }
 
@@ -50,9 +58,11 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 
         RegisterEventHandler<EventPlayerDisconnect>(OnPlayerDisconnect);
         RegisterEventHandler<EventRoundEnd>(OnRoundEnd);
+        RegisterEventHandler<EventRoundStart>(OnRoundStart);
         RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnectFull);
         RegisterEventHandler<EventPlayerSpawn>(OnPlayerSpawn);
         RegisterEventHandler<EventPlayerDeath>(OnPlayerDeath);
+        RegisterEventHandler<EventPlayerTeam>(OnPlayerTeam);
     }
 
     public override void Unload(bool hotReload)
@@ -67,10 +77,7 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
     private void StartUpdateTimer()
     {
         _updateTimer?.Kill();
-        _updateTimer = AddTimer(Config.Update.CheckInterval, () =>
-        {
-            CheckAndUpdateSpectatorLists();
-        }, TimerFlags.REPEAT);
+        _updateTimer = AddTimer(Config.Update.CheckInterval, CheckAndUpdateSpectatorLists, TimerFlags.REPEAT);
     }
 
     [CommandHelper(minArgs: 0, usage: "", whoCanExecute: CommandUsage.CLIENT_ONLY)]
@@ -118,7 +125,6 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
             var currentSpectatorNames = currentSpectators.Select(s => s.PlayerName).ToList();
 
             bool hasChanged = false;
-
             if (_lastSpectatorLists.ContainsKey(player.Slot))
             {
                 var lastList = _lastSpectatorLists[player.Slot];
@@ -168,7 +174,6 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
             return;
 
         var alivePlayers = Utilities.GetPlayers().Where(p => p.IsValid && p.PawnIsAlive).ToList();
-
         foreach (var player in alivePlayers)
         {
             var spectators = GetPlayersSpectating(player);
@@ -187,12 +192,15 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
             return spectators;
 
         var allPlayers = Utilities.GetPlayers();
-
         foreach (var player in allPlayers)
         {
             if (!player.IsValid || player.Slot == targetPlayer.Slot)
                 continue;
 
+            if (player.PawnIsAlive)
+                continue;
+
+            bool isSpectating = false;
             if (player.PlayerPawn?.Value != null)
             {
                 var observerServices = player.PlayerPawn.Value.ObserverServices;
@@ -201,13 +209,12 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
                     var observerTarget = observerServices.ObserverTarget;
                     if (observerTarget?.Value?.Handle == targetPlayer.PlayerPawn.Value.Handle)
                     {
-                        spectators.Add(player);
-                        continue;
+                        isSpectating = true;
                     }
                 }
             }
 
-            if (player.ObserverPawn?.Value != null)
+            if (!isSpectating && player.ObserverPawn?.Value != null)
             {
                 var observerServices = player.ObserverPawn.Value.ObserverServices;
                 if (observerServices != null)
@@ -215,10 +222,14 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
                     var observerTarget = observerServices.ObserverTarget;
                     if (observerTarget?.Value?.Handle == targetPlayer.PlayerPawn.Value.Handle)
                     {
-                        spectators.Add(player);
-                        continue;
+                        isSpectating = true;
                     }
                 }
+            }
+
+            if (isSpectating)
+            {
+                spectators.Add(player);
             }
         }
 
@@ -236,6 +247,8 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
         if (player != null && player.IsValid)
         {
             _displayManager?.OnPlayerDisconnect(player);
+            _lastSpectatorLists.Remove(player.Slot);
+            Server.NextFrame(UpdateAllSpectatorLists);
         }
         return HookResult.Continue;
     }
@@ -245,10 +258,8 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
         var player = @event.Userid;
         if (player != null && player.IsValid)
         {
-            Server.NextFrame(() =>
-            {
-                UpdateAllSpectatorLists();
-            });
+            _displayManager?.CleanupPlayerDisplay(player);
+            Server.NextFrame(UpdateAllSpectatorLists);
         }
         return HookResult.Continue;
     }
@@ -259,11 +270,17 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
         if (player != null && player.IsValid)
         {
             _displayManager?.CleanupPlayerDisplay(player);
+            Server.NextFrame(UpdateAllSpectatorLists);
+        }
+        return HookResult.Continue;
+    }
 
-            Server.NextFrame(() =>
-            {
-                UpdateAllSpectatorLists();
-            });
+    private HookResult OnPlayerTeam(EventPlayerTeam @event, GameEventInfo info)
+    {
+        var player = @event.Userid;
+        if (player != null && player.IsValid)
+        {
+            Server.NextFrame(UpdateAllSpectatorLists);
         }
         return HookResult.Continue;
     }
@@ -271,6 +288,14 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
     private void UpdateAllSpectatorLists()
     {
         var alivePlayers = Utilities.GetPlayers().Where(p => p.IsValid && p.PawnIsAlive).ToList();
+        var allPlayers = Utilities.GetPlayers().Where(p => p.IsValid).ToList();
+        foreach (var player in allPlayers)
+        {
+            if (!player.PawnIsAlive)
+            {
+                _displayManager?.CleanupPlayerDisplay(player);
+            }
+        }
 
         foreach (var player in alivePlayers)
         {
@@ -286,6 +311,13 @@ public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 
             var currentSpectatorNames = currentSpectators.Select(s => s.PlayerName).ToList();
             _lastSpectatorLists[player.Slot] = currentSpectatorNames;
+        }
+
+        var alivePlayerSlots = alivePlayers.Select(p => p.Slot).ToHashSet();
+        var slotsToRemove = _lastSpectatorLists.Keys.Where(slot => !alivePlayerSlots.Contains(slot)).ToList();
+        foreach (var slot in slotsToRemove)
+        {
+            _lastSpectatorLists.Remove(slot);
         }
     }
 }
