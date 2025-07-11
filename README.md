@@ -34,7 +34,7 @@ The plugin supports three different storage methods for user preferences:
 | Storage Type | Description | Persistence | Performance | Dependencies |
 |--------------|-------------|-------------|-------------|--------------|
 | **PlayerSettings** | Uses PlayerSettings plugin | ✅ Persistent | ⚡ Fast | PlayerSettingsCS2 + AnyBaseLibCS2 |
-| **MySQL** | Traditional database storage | ✅ Persistent | 🔄 Database queries | MySQL Server |
+| **MySQL** | Traditional database storage | ✅ Persistent | 🔄 Database queries | MySQL/MariaDB database |
 | **Memory** | Temporary in-memory storage | ❌ Lost on restart | ⚡⚡ Fastest | None |
 
 **Recommendation**: Use `PlayerSettings` for most servers, `MySQL` if you don't care about the number of active pool connections, and `Memory` for testing.
