@@ -1,6 +1,7 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Modules.Admin;
+using CounterStrikeSharp.API.Modules.Utils;
 
 using SpectatorList.Configs;
 using SpectatorList.Display;
@@ -10,6 +11,7 @@ namespace SpectatorList.Managers
 {
     public class DisplayManager : IDisposable
     {
+        private readonly Dictionary<int, CenterMessageDisplay> _centerDisplays;
         private readonly Dictionary<int, ScreenViewDisplay> _screenDisplays;
         private readonly SpectatorConfig _config;
         private readonly BasePlugin _plugin;
@@ -20,6 +22,7 @@ namespace SpectatorList.Managers
             _config = config;
             _plugin = plugin;
             _storageService = storageService;
+            _centerDisplays = new Dictionary<int, CenterMessageDisplay>();
             _screenDisplays = new Dictionary<int, ScreenViewDisplay>();
 
             _ = InitializeStorageAsync();
@@ -232,15 +235,7 @@ namespace SpectatorList.Managers
             {
                 try
                 {
-                    if (_config.Display.SendToChat)
-                    {
-                        DisplayInChat(player, filteredSpectators);
-                    }
-
-                    if (_config.Display.UseScreenView)
-                    {
-                        DisplayOnScreen(player, filteredSpectators);
-                    }
+                    DisplayOnScreen(player, filteredSpectators);
                 }
                 catch (Exception ex)
                 {
@@ -254,26 +249,6 @@ namespace SpectatorList.Managers
             _ = DisplaySpectatorListAsync(player, spectators);
         }
 
-        private void DisplayInChat(CCSPlayerController player, List<CCSPlayerController> spectators)
-        {
-            if (spectators.Count == 0)
-                return;
-
-            var spectatorNames = spectators.Select(s => s.PlayerName).ToList();
-            var spectatorCount = spectators.Count;
-
-            if (spectatorNames.Count > _config.Display.MaxNamesInMessage)
-            {
-                var remainingCount = spectatorNames.Count - _config.Display.MaxNamesInMessage;
-                spectatorNames = spectatorNames.Take(_config.Display.MaxNamesInMessage).ToList();
-                spectatorNames.Add(_plugin.Localizer["and_more", remainingCount]);
-            }
-
-            var spectatorList = string.Join(", ", spectatorNames);
-            var chatMessage = $"{_plugin.Localizer["prefix"]} {_plugin.Localizer["spectators_watching", spectatorCount, spectatorList]}";
-            player.PrintToChat(chatMessage);
-        }
-
         private void DisplayOnScreen(CCSPlayerController player, List<CCSPlayerController> spectators)
         {
             if (spectators.Count == 0)
@@ -281,23 +256,97 @@ namespace SpectatorList.Managers
 
             CleanupPlayerDisplay(player);
 
-            var screenDisplay = new ScreenViewDisplay(player, _config, _plugin);
-            _screenDisplays[player.Slot] = screenDisplay;
+            if (_config.Display.UseCenterMessage)
+            {
+                var centerDisplay = new CenterMessageDisplay(player, _config, _plugin);
+                _centerDisplays[player.Slot] = centerDisplay;
+                centerDisplay.ShowSpectatorList(spectators);
+            }
 
-            screenDisplay.ShowSpectatorList(spectators);
+            if (_config.Display.UseScreenView)
+            {
+                var screenDisplay = new ScreenViewDisplay(player, _config, _plugin);
+                _screenDisplays[player.Slot] = screenDisplay;
+                screenDisplay.ShowSpectatorList(spectators);
+            }
+
+            if (_config.Display.SendToChat)
+            {
+                DisplayInChat(player, spectators);
+            }
+        }
+
+        private void DisplayInChat(CCSPlayerController player, List<CCSPlayerController> spectators)
+        {
+            if (spectators.Count == 0)
+                return;
+
+            try
+            {
+                var spectatorCount = spectators.Count;
+                var spectatorNames = new List<string>();
+
+                foreach (var spectator in spectators.Take(_config.Display.MaxNamesInMessage))
+                {
+                    if (spectator.IsValid && !string.IsNullOrEmpty(spectator.PlayerName))
+                    {
+                        spectatorNames.Add(spectator.PlayerName);
+                    }
+                }
+
+                if (spectators.Count > _config.Display.MaxNamesInMessage)
+                {
+                    var remainingCount = spectators.Count - _config.Display.MaxNamesInMessage;
+                    string andMoreText = _plugin.Localizer["and_more", remainingCount];
+                    spectatorNames.Add(andMoreText);
+                }
+
+                var spectatorList = string.Join(", ", spectatorNames);
+
+                string prefix = _plugin.Localizer["prefix"];
+                string message = _plugin.Localizer["spectators_watching", spectatorCount, spectatorList];
+                player.PrintToChat($"{prefix} {message}");
+            }
+            catch (Exception ex)
+            {
+                Server.PrintToConsole($"[SpectatorList] Error in DisplayInChat: {ex.Message}");
+                Server.PrintToConsole($"[SpectatorList] Exception type: {ex.GetType().Name}");
+                try
+                {
+                    string prefix = _plugin.Localizer["prefix"];
+                    string simpleMessage = _plugin.Localizer["spectators_simplewatching", spectators.Count];
+                    player.PrintToChat($"{prefix} {simpleMessage}");
+                }
+                catch (Exception ex2)
+                {
+                    Server.PrintToConsole($"[SpectatorList] Fallback message also failed: {ex2.Message}");
+                }
+            }
         }
 
         public void CleanupPlayerDisplay(CCSPlayerController player)
         {
-            if (_screenDisplays.TryGetValue(player.Slot, out var display))
+            if (_centerDisplays.TryGetValue(player.Slot, out var centerDisplay))
             {
-                display.Dispose();
+                centerDisplay.Dispose();
+                _centerDisplays.Remove(player.Slot);
+            }
+
+            if (_screenDisplays.TryGetValue(player.Slot, out var screenDisplay))
+            {
+                screenDisplay.Dispose();
                 _screenDisplays.Remove(player.Slot);
             }
         }
 
         public void CleanupAllDisplays()
         {
+            foreach (var display in _centerDisplays.Values)
+            {
+                display.Dispose();
+            }
+            _centerDisplays.Clear();
+
             foreach (var display in _screenDisplays.Values)
             {
                 display.Dispose();
@@ -307,9 +356,14 @@ namespace SpectatorList.Managers
 
         public void HidePlayerDisplay(CCSPlayerController player)
         {
-            if (_screenDisplays.TryGetValue(player.Slot, out var display))
+            if (_centerDisplays.TryGetValue(player.Slot, out var centerDisplay))
             {
-                display.HideDisplay();
+                centerDisplay.HideDisplay();
+            }
+
+            if (_screenDisplays.TryGetValue(player.Slot, out var screenDisplay))
+            {
+                screenDisplay.HideDisplay();
             }
         }
 

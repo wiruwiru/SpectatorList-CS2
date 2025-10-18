@@ -50,6 +50,12 @@ namespace SpectatorList.Configs
         [JsonPropertyName("SendToChat")]
         public bool SendToChat { get; set; } = false;
 
+        [JsonPropertyName("UseCenterMessage")]
+        public bool UseCenterMessage { get; set; } = false;
+
+        [JsonPropertyName("CenterMessageDuration")]
+        public float CenterMessageDuration { get; set; } = 5.0f;
+
         [JsonPropertyName("UseScreenView")]
         public bool UseScreenView { get; set; } = true;
 

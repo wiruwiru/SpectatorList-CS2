@@ -1,9 +1,6 @@
 # SpectatorList CS2
 Shows real-time spectators both in chat messages and on-screen display with customizable permissions and exclusion flags.
 
-> [!IMPORTANT]
-> Following the update on 07/28/2025, this plugin has stopped working due to the removal of features by Valve. In the future, when possible, I will update the plugin so that it works again.
-
 ![Counter-strike 2 Screenshot 2025 07 06 - 19 34 39 42](https://github.com/user-attachments/assets/d8a908ea-7baa-4609-bdee-29545edd693e)
 
 ---
@@ -74,6 +71,8 @@ The plugin supports three different storage methods for user preferences:
 | `ExclusionFlag`   | Players with this flag will be hidden from spectator lists. (**Default**: `"@css/generic"`) | **YES**  |
 | `MaxNamesInMessage` | Maximum number of spectator names to show in chat before showing "and X more...". (**Default**: `5`) | **YES**  |
 | `SendToChat`      | Enable/disable chat messages for spectator lists. (**Default**: `false`) | **YES**  |
+| `UseCenterMessage` | Enable/disable center screen message display for spectator lists. (**Default**: `false`) | **YES**  |
+| `CenterMessageDuration` | Duration (in seconds) to show center message before auto-hiding. Set to 0 for permanent display. (**Default**: `5.0`) | **YES**  |
 | `UseScreenView`   | Enable/disable on-screen floating text display. (**Default**: `true`) | **YES**  |
 | `ScreenViewSettings` | Configuration for on-screen display positioning and appearance. | **YES**  |
 

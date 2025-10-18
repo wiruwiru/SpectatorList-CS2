@@ -1,6 +1,5 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using CounterStrikeSharp.API.Modules.Memory;
 using CounterStrikeSharp.API.Modules.Utils;
 using System.Drawing;
 using System.Text;
@@ -15,7 +14,7 @@ namespace SpectatorList.Display
         private readonly SpectatorConfig _config;
         private readonly BasePlugin _plugin;
         private CPointWorldText? _screenText;
-        private CCSGOViewModel? _viewModel;
+        private CPointOrient? _pointOrient;
         private bool _isDisplaying = false;
 
         public ScreenViewDisplay(CCSPlayerController player, SpectatorConfig config, BasePlugin plugin)
@@ -34,8 +33,8 @@ namespace SpectatorList.Display
             {
                 CleanupDisplay();
 
-                _viewModel = EnsureCustomView();
-                if (_viewModel == null)
+                _pointOrient = CreateOrGetPointOrient();
+                if (_pointOrient == null)
                     return;
 
                 var vectorData = GetPlayerVectorData();
@@ -76,27 +75,33 @@ namespace SpectatorList.Display
             return sb.ToString();
         }
 
-        private CCSGOViewModel? EnsureCustomView()
+        private CPointOrient? CreateOrGetPointOrient()
         {
+            if (_pointOrient != null && _pointOrient.IsValid)
+                return _pointOrient;
+
             var pawn = GetPlayerPawn();
-            if (pawn?.ViewModelServices == null)
+            if (pawn == null)
                 return null;
 
-            int offset = Schema.GetSchemaOffset("CCSPlayer_ViewModelServices", "m_hViewModel");
-            IntPtr viewModelHandleAddress = pawn.ViewModelServices.Handle + offset + 4;
+            CPointOrient? entOrient = Utilities.CreateEntityByName<CPointOrient>("point_orient");
+            if (entOrient == null || !entOrient.IsValid)
+                return null;
 
-            CHandle<CCSGOViewModel> handle = new(viewModelHandleAddress);
-            if (!handle.IsValid)
-            {
-                CCSGOViewModel viewmodel = Utilities.CreateEntityByName<CCSGOViewModel>("predicted_viewmodel")!;
-                if (viewmodel == null) return null;
+            entOrient.Active = true;
+            entOrient.GoalDirection = PointOrientGoalDirectionType_t.eEyesForward;
+            entOrient.DispatchSpawn();
 
-                viewmodel.DispatchSpawn();
-                handle.Raw = viewmodel.EntityHandle.Raw;
-                Utilities.SetStateChanged(pawn, "CCSPlayerPawnBase", "m_pViewModelServices");
-            }
+            Vector vecPos = new Vector(
+                pawn.AbsOrigin!.X,
+                pawn.AbsOrigin!.Y,
+                pawn.AbsOrigin!.Z + pawn.ViewOffset.Z
+            );
+            entOrient.Teleport(vecPos, null, null);
+            entOrient.AcceptInput("SetParent", pawn, null, "!activator");
+            entOrient.AcceptInput("SetTarget", pawn, null, "!activator");
 
-            return handle.Value;
+            return entOrient;
         }
 
         private CCSPlayerPawn? GetPlayerPawn()
@@ -116,24 +121,45 @@ namespace SpectatorList.Display
 
         private (Vector Position, QAngle Angle)? GetPlayerVectorData()
         {
-            var playerPawn = GetPlayerPawn();
-            if (playerPawn == null)
+            if (_pointOrient == null || !_pointOrient.IsValid)
                 return null;
 
-            QAngle eyeAngles = playerPawn.EyeAngles;
-            Vector forward = new(), right = new(), up = new();
-            NativeAPI.AngleVectors(eyeAngles.Handle, forward.Handle, right.Handle, up.Handle);
+            var angle = _pointOrient.AbsRotation;
+            if (angle == null)
+                return null;
+
+            AngleVectors(angle, out Vector forward, out Vector right, out Vector up);
 
             Vector offset = forward * 7 + right * _config.Display.ScreenView.PositionX + up * _config.Display.ScreenView.PositionY;
-            QAngle angle = new()
+
+            QAngle displayAngle = new()
             {
-                Y = eyeAngles.Y + 270,
-                Z = 90 - eyeAngles.X,
+                Y = angle.Y + 270,
+                Z = 90 - angle.X,
                 X = 0
             };
 
-            Vector position = playerPawn.AbsOrigin! + offset + new Vector(0, 0, playerPawn.ViewOffset.Z);
-            return (position, angle);
+            Vector position = _pointOrient.AbsOrigin! + offset;
+            return (position, displayAngle);
+        }
+
+        private static void AngleVectors(QAngle angles, out Vector forward, out Vector right, out Vector up)
+        {
+            float angle = angles.Y * (MathF.PI * 2 / 360);
+            float sy = MathF.Sin(angle);
+            float cy = MathF.Cos(angle);
+
+            angle = angles.X * (MathF.PI * 2 / 360);
+            float sp = MathF.Sin(angle);
+            float cp = MathF.Cos(angle);
+
+            angle = angles.Z * (MathF.PI * 2 / 360);
+            float sr = MathF.Sin(angle);
+            float cr = MathF.Cos(angle);
+
+            forward = new Vector(cp * cy, cp * sy, -sp);
+            right = new Vector((-1 * sr * sp * cy) + (-1 * cr * -sy), (-1 * sr * sp * sy) + (-1 * cr * cy), -1 * sr * cp);
+            up = new Vector((cr * sp * cy) + (-sr * -sy), (cr * sp * sy) + (-sr * cy), cr * cp);
         }
 
         private CPointWorldText? CreateWorldTextEntity(string text, (Vector Position, QAngle Angle) vectorData)
@@ -164,7 +190,7 @@ namespace SpectatorList.Display
 
             entity.DispatchSpawn();
             entity.Teleport(vectorData.Position, vectorData.Angle, null);
-            entity.AcceptInput("SetParent", _viewModel, null, "!activator");
+            entity.AcceptInput("SetParent", _pointOrient, null, "!activator");
 
             return entity;
         }
@@ -209,6 +235,13 @@ namespace SpectatorList.Display
                     _screenText.Remove();
                 }
                 _screenText = null;
+
+                if (_pointOrient?.IsValid == true)
+                {
+                    _pointOrient.Remove();
+                }
+                _pointOrient = null;
+
                 _isDisplaying = false;
             }
             catch (Exception ex)

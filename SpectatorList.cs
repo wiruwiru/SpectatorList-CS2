@@ -13,11 +13,11 @@ using SpectatorList.Services;
 
 namespace SpectatorList;
 
-[MinimumApiVersion(318)]
+[MinimumApiVersion(342)]
 public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 {
     public override string ModuleName => "SpectatorList";
-    public override string ModuleVersion => "1.0.3";
+    public override string ModuleVersion => "1.0.4";
     public override string ModuleAuthor => "luca.uy";
     public override string ModuleDescription => "Toggle spectator list display via chat messages with ScreenView support and exclusion flags";
 
