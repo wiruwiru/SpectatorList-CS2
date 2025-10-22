@@ -17,7 +17,7 @@ namespace SpectatorList;
 public class SpectatorList : BasePlugin, IPluginConfig<SpectatorConfig>
 {
     public override string ModuleName => "SpectatorList";
-    public override string ModuleVersion => "1.0.4";
+    public override string ModuleVersion => "1.0.5";
     public override string ModuleAuthor => "luca.uy";
     public override string ModuleDescription => "Toggle spectator list display via chat messages with ScreenView support and exclusion flags";
 
