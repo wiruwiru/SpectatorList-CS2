@@ -1,6 +1,9 @@
 # SpectatorList CS2
 Shows real-time spectators both in chat messages and on-screen display with customizable permissions and exclusion flags.
 
+> [!CAUTION]
+> The current solution for `"UseScreenView"` does not work as well as it did before the update on 07/28/2025. It is recommended not to use this feature for now, pending a more stable method.
+
 ![Counter-strike 2 Screenshot 2025 07 06 - 19 34 39 42](https://github.com/user-attachments/assets/d8a908ea-7baa-4609-bdee-29545edd693e)
 
 ---
