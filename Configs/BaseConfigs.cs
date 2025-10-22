@@ -54,7 +54,7 @@ namespace SpectatorList.Configs
         public bool UseCenterMessage { get; set; } = false;
 
         [JsonPropertyName("CenterMessageType")]
-        public string CenterMessageType { get; set; } = "PrintToCenter";
+        public string CenterMessageType { get; set; } = "Center";
 
         [JsonPropertyName("CenterMessageDuration")]
         public float CenterMessageDuration { get; set; } = 5.0f;
