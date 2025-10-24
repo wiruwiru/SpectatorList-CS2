@@ -53,50 +53,17 @@ namespace SpectatorList.Configs
         [JsonPropertyName("UseCenterMessage")]
         public bool UseCenterMessage { get; set; } = false;
 
-        [JsonPropertyName("CenterMessageType")]
-        public string CenterMessageType { get; set; } = "Center";
-
         [JsonPropertyName("CenterMessageDuration")]
         public float CenterMessageDuration { get; set; } = 5.0f;
 
-        [JsonPropertyName("CenterMessageSettings")]
-        public CenterMessageSettings CenterMessage { get; set; } = new();
+        [JsonPropertyName("CenterMessageHtml")]
+        public string CenterMessageHtml { get; set; } = "<font class='fontSize-m' color='#FFD700'>{TITLE}</font><br><font class='fontSize-m' color='#87CEEB'>{SPECTATORS}</font>";
 
         [JsonPropertyName("UseScreenView")]
         public bool UseScreenView { get; set; } = true;
 
         [JsonPropertyName("ScreenViewSettings")]
         public ScreenViewSettings ScreenView { get; set; } = new();
-    }
-
-    public class CenterMessageSettings
-    {
-        [JsonPropertyName("UseCustomHtml")]
-        public bool UseCustomHtml { get; set; } = false;
-
-        [JsonPropertyName("CustomHtmlTemplate")]
-        public string CustomHtmlTemplate { get; set; } = @"<font class='fontSize-l' color='#FFD700'>{TITLE}</font><br><font class='fontSize-m' color='#87CEEB'>{SPECTATORS}</font>";
-
-        [JsonPropertyName("TitleStyle")]
-        public string TitleStyle { get; set; } = "fontSize-l stratum-bold";
-
-        [JsonPropertyName("TitleColor")]
-        public string TitleColor { get; set; } = "#FFD700";
-
-        [JsonPropertyName("ContentStyle")]
-        public string ContentStyle { get; set; } = "fontSize-m stratum-regular";
-
-        [JsonPropertyName("ContentColor")]
-        public string ContentColor { get; set; } = "#FFFFFF";
-
-        [JsonPropertyName("SpectatorNameStyle")]
-        public string SpectatorNameStyle { get; set; } = "fontSize-m stratum-regular";
-
-        [JsonPropertyName("SpectatorNameColor")]
-        public string SpectatorNameColor { get; set; } = "#87CEEB";
-
-        [JsonPropertyName("SeparatorColor")]
-        public string SeparatorColor { get; set; } = "#CCCCCC";
     }
 
     public class ScreenViewSettings
@@ -135,7 +102,7 @@ namespace SpectatorList.Configs
         public uint Port { get; set; } = 3306;
 
         [JsonPropertyName("User")]
-        public string User { get; set; } = "root";
+        public string User { get; set; } = "";
 
         [JsonPropertyName("Password")]
         public string Password { get; set; } = "";

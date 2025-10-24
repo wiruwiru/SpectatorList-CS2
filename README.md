@@ -18,8 +18,8 @@ Shows real-time spectators both in chat messages and on-screen display with cust
 
 ### Optional Dependencies (for PlayerSettings storage)
 If you want to use `PlayerSettings` storage type:
-2. Install [PlayerSettingsCS2](https://github.com/NickFox007/PlayerSettingsCS2/releases/latest)  (required dependency)
-1. Install [AnyBaseLibCS2](https://github.com/NickFox007/AnyBaseLibCS2/releases/latest)  (required for PlayerSettings)
+1. Install [AnyBaseLibCS2](https://github.com/NickFox007/AnyBaseLibCS2/releases/latest) (required for PlayerSettings)
+2. Install [PlayerSettingsCS2](https://github.com/NickFox007/PlayerSettingsCS2/releases/latest) (required dependency)
 3. Set `StorageType` to `"PlayerSettings"` in your config
 
 ### Optional Dependencies (for MySQL storage)
@@ -48,8 +48,8 @@ The plugin supports three different storage methods for user preferences:
 | Parameter            | Description                                                                                       | Required |
 |----------------------|---------------------------------------------------------------------------------------------------|----------|
 | `Commands`           | List of chat commands players can use to toggle spectator list display. (**Default**: `["css_speclist", "css_specs", "css_spectators"]`) | **YES**  |
-| `CommandPermissions` | Permission flag required to use the toggle commands. Leave empty for all players. (**Default**: `"@css/root"`) | **YES**  |
-| `CanViewList`        | Permission flag required to view spectator lists (both chat and screen). Leave empty for all players. (**Default**: `""`) | **YES**  |
+| `CommandPermissions` | Permission flag required to use the toggle commands. Leave empty for all players. (**Default**: `"@css/vip"`) | **YES**  |
+| `CanViewList`        | Permission flag required to view spectator lists (both chat and screen). Leave empty for all players. (**Default**: `"@css/vip"`) | **YES**  |
 | `UpdateSettings`     | Configuration for automatic updates and periodic displays. | **YES**  |
 | `DisplaySettings`    | Configuration for how spectator lists are displayed. | **YES**  |
 | `StorageSettings`    | Configuration for user preference storage method. | **YES**  |
@@ -72,34 +72,19 @@ The plugin supports three different storage methods for user preferences:
 | Parameter         | Description                                                                                         | Required |
 |-------------------|-----------------------------------------------------------------------------------------------------|----------|
 | `ExclusionFlag`   | Players with this flag will be hidden from spectator lists. (**Default**: `"@css/generic"`) | **YES**  |
-| `MaxNamesInMessage` | Maximum number of spectator names to show in chat before showing "and X more...". (**Default**: `5`) | **YES**  |
+| `MaxNamesInMessage` | Maximum number of spectator names to show before showing "and X more...". (**Default**: `5`) | **YES**  |
 | `SendToChat`      | Enable/disable chat messages for spectator lists. (**Default**: `false`) | **YES**  |
-| `UseCenterMessage` | Enable/disable center screen message display for spectator lists. (**Default**: `false`) | **YES**  |
-| `CenterMessageType` | Type of center message to use: `"Center"`, `"CenterAlert"`, or `"CenterHtml"`. (**Default**: `"Center"`) | **YES**  |
+| `UseCenterMessage` | Enable/disable center screen HTML message display for spectator lists. (**Default**: `false`) | **YES**  |
 | `CenterMessageDuration` | Duration (in seconds) to show center message before auto-hiding. Set to 0 for permanent display. (**Default**: `5.0`) | **YES**  |
-| `CenterMessageSettings` | Advanced HTML customization options for center messages (only applies when `CenterMessageType` is `"CenterHtml"`). | **YES**  |
+| `CenterMessageHtml` | Custom HTML template for center messages. Use placeholders: `{TITLE}`, `{SPECTATORS}`, `{COUNT}`. (**Default**: `"<font class='fontSize-m' color='#FFD700'>{TITLE}</font><br><font class='fontSize-m' color='#87CEEB'>{SPECTATORS}</font>`) | **YES**  |
 | `UseScreenView`   | Enable/disable on-screen floating text display. (**Default**: `true`) | **YES**  |
 | `ScreenViewSettings` | Configuration for on-screen display positioning and appearance. | **YES**  |
-
-### Center Message Settings Parameters
-*(Only applies when `CenterMessageType` is set to `"CenterHtml"`)*
-| Parameter         | Description                                                                                         | Required |
-|-------------------|-----------------------------------------------------------------------------------------------------|----------|
-| `UseCustomHtml`   | Enable custom HTML template for center messages. (**Default**: `false`) | **YES**  |
-| `CustomHtmlTemplate` | Custom HTML template using placeholders `{TITLE}`, `{SPECTATORS}`, and `{COUNT}`. (**Default**: `"<font class='fontSize-l' color='#FFD700'>{TITLE}</font><br><font class='fontSize-m' color='#87CEEB'>{SPECTATORS}</font>"`) | **NO**   |
-| `TitleStyle`      | CSS class for title styling (when not using custom template). (**Default**: `"fontSize-l stratum-bold"`) | **YES**  |
-| `TitleColor`      | Hex color code for title (when not using custom template). (**Default**: `"#FFD700"`) | **YES**  |
-| `ContentStyle`    | CSS class for content styling (when not using custom template). (**Default**: `"fontSize-m stratum-regular"`) | **YES**  |
-| `ContentColor`    | Hex color code for content text (when not using custom template). (**Default**: `"#FFFFFF"`) | **YES**  |
-| `SpectatorNameStyle` | CSS class for spectator names (when not using custom template). (**Default**: `"fontSize-m stratum-regular"`) | **YES**  |
-| `SpectatorNameColor` | Hex color code for spectator names (when not using custom template). (**Default**: `"#87CEEB"`) | **YES**  |
-| `SeparatorColor`  | Hex color code for separators between names (when not using custom template). (**Default**: `"#CCCCCC"`) | **YES**  |
 
 ### Screen View Settings Parameters
 | Parameter         | Description                                                                                         | Required |
 |-------------------|-----------------------------------------------------------------------------------------------------|----------|
 | `PositionX`       | Horizontal position offset for on-screen display. (**Default**: `-8.0`) | **YES**  |
-| `PositionY`       | Vertical position offset for on-screen display. (**Default**: `2.0`) | **YES**  |
+| `PositionY`       | Vertical position offset for on-screen display. (**Default**: `1.0`) | **YES**  |
 | `TitleColor`      | Hex color code for the spectator list title. (**Default**: `"#FFD700"`) | **YES**  |
 | `PlayerNameColor` | Hex color code for spectator names. (**Default**: `"#FFFFFF"`) | **YES**  |
 | `CountColor`      | Hex color code for spectator count. (**Default**: `"#87CEEB"`) | **YES**  |
@@ -108,34 +93,11 @@ The plugin supports three different storage methods for user preferences:
 *(Only used when `StorageType` is set to `"MySQL"`)*
 | Parameter         | Description                                                                                         | Required |
 |-------------------|-----------------------------------------------------------------------------------------------------|----------|
-| `Host`            | MySQL server hostname or IP address. (**Default**: `"localhost"`) | **NO**   |
+| `Host`            | MySQL server hostname or IP address. (**Default**: `""`) | **NO**   |
 | `Port`            | MySQL server port. (**Default**: `3306`) | **NO**   |
-| `User`            | MySQL username for database connection. (**Default**: `"root"`) | **NO**   |
+| `User`            | MySQL username for database connection. (**Default**: `""`) | **NO**   |
 | `Password`        | MySQL password for database connection. (**Default**: `""`) | **NO**   |
 | `DatabaseName`    | Name of the MySQL database to use. (**Default**: `""`) | **NO**   |
-
----
-
-## 🎨 Center Message Display Types
-The plugin supports three different center message display methods:
-
-### 1. Center (`"Center"`)
-- Standard center screen text
-- Simple, clean display
-- Best for basic notifications
-
-### 2. Center Alert (`"CenterAlert"`)
-- Alert-style center message
-- More prominent than standard center
-- Good for important notifications
-
-### 3. Center HTML (`"CenterHtml"`)
-- Rich HTML formatting support
-- Customizable colors, fonts, and styling
-- Supports custom HTML templates
-- Most flexible option for advanced customization
-
-**Note**: When using `CenterHtml`, you can either use the default styled output or enable `UseCustomHtml` to provide your own HTML template with placeholders.
 
 ---
 

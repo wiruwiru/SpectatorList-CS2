@@ -1,18 +1,10 @@
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
-using System.Text;
 
 using SpectatorList.Configs;
 
 namespace SpectatorList.Display
 {
-    public enum CenterMessageType
-    {
-        Center,
-        CenterAlert,
-        CenterHtml
-    }
-
     public class CenterMessageDisplay : IDisposable
     {
         private readonly CCSPlayerController _player;
@@ -20,7 +12,6 @@ namespace SpectatorList.Display
         private readonly BasePlugin _plugin;
         private bool _isDisplaying = false;
         private CounterStrikeSharp.API.Modules.Timers.Timer? _hideTimer;
-        private CenterMessageType _messageType;
         private string? _currentMessage;
         private Listeners.OnTick? _onTickHandler;
 
@@ -29,18 +20,6 @@ namespace SpectatorList.Display
             _player = player;
             _config = config;
             _plugin = plugin;
-            _messageType = ParseMessageType(config.Display.CenterMessageType);
-        }
-
-        private CenterMessageType ParseMessageType(string type)
-        {
-            return type.ToLower() switch
-            {
-                "center" => CenterMessageType.Center,
-                "centeralert" => CenterMessageType.CenterAlert,
-                "centerhtml" => CenterMessageType.CenterHtml,
-                _ => CenterMessageType.Center
-            };
         }
 
         public void ShowSpectatorList(List<CCSPlayerController> spectators)
@@ -53,26 +32,14 @@ namespace SpectatorList.Display
                 _hideTimer?.Kill();
                 _hideTimer = null;
 
-                string message = _messageType == CenterMessageType.CenterHtml
-                    ? BuildHtmlMessage(spectators)
-                    : BuildMessage(spectators);
+                _currentMessage = BuildHtmlMessage(spectators);
 
-                _currentMessage = message;
-
-                if (_messageType == CenterMessageType.CenterHtml)
+                if (!_isDisplaying)
                 {
-                    if (!_isDisplaying)
-                    {
-                        _onTickHandler = OnTickUpdate;
-                        _plugin.RegisterListener(_onTickHandler);
-                    }
+                    _onTickHandler = OnTickUpdate;
+                    _plugin.RegisterListener(_onTickHandler);
+                    _isDisplaying = true;
                 }
-                else
-                {
-                    SendMessage(message);
-                }
-
-                _isDisplaying = true;
 
                 if (_config.Display.CenterMessageDuration > 0)
                 {
@@ -88,83 +55,16 @@ namespace SpectatorList.Display
         private void OnTickUpdate()
         {
             if (!_isDisplaying || !_player.IsValid || string.IsNullOrEmpty(_currentMessage))
-            {
                 return;
-            }
 
-            if (_player.IsValid)
-            {
-                _player.PrintToCenterHtml(_currentMessage);
-            }
-        }
-
-        private void SendMessage(string message)
-        {
-            switch (_messageType)
-            {
-                case CenterMessageType.Center:
-                    _player.PrintToCenter(message);
-                    break;
-                case CenterMessageType.CenterAlert:
-                    _player.PrintToCenterAlert(message);
-                    break;
-                case CenterMessageType.CenterHtml:
-                    _player.PrintToCenterHtml(message);
-                    break;
-            }
-        }
-
-        private string BuildMessage(List<CCSPlayerController> spectators)
-        {
-            var sb = new StringBuilder();
-
-            string titleText = _plugin.Localizer["spectators_title", spectators.Count];
-            titleText = titleText.Replace("[SpectatorList]", "").Trim();
-
-            sb.Append($"{titleText}\n");
-
-            int maxToShow = Math.Min(spectators.Count, _config.Display.MaxNamesInMessage);
-            var spectatorNames = new List<string>();
-
-            for (int i = 0; i < maxToShow; i++)
-            {
-                var spectator = spectators[i];
-                if (spectator.IsValid && !string.IsNullOrEmpty(spectator.PlayerName))
-                {
-                    spectatorNames.Add(spectator.PlayerName);
-                }
-            }
-
-            if (spectatorNames.Count > 0)
-            {
-                sb.Append(string.Join(", ", spectatorNames));
-            }
-
-            if (spectators.Count > maxToShow)
-            {
-                int remaining = spectators.Count - maxToShow;
-                string andMoreText = _plugin.Localizer["and_more", remaining];
-                andMoreText = andMoreText.Replace("[SpectatorList]", "").Trim();
-                sb.Append($", {andMoreText}");
-            }
-
-            return sb.ToString().TrimEnd();
+            _player.PrintToCenterHtml(_currentMessage);
         }
 
         private string BuildHtmlMessage(List<CCSPlayerController> spectators)
         {
-            if (_config.Display.CenterMessage.UseCustomHtml)
-            {
-                return BuildCustomHtmlMessage(spectators);
-            }
-
-            return BuildDefaultHtmlMessage(spectators);
-        }
-
-        private string BuildCustomHtmlMessage(List<CCSPlayerController> spectators)
-        {
             string titleText = _plugin.Localizer["spectators_title", spectators.Count];
             titleText = titleText.Replace("[SpectatorList]", "").Trim();
+            string escapedTitle = System.Net.WebUtility.HtmlEncode(titleText);
 
             int maxToShow = Math.Min(spectators.Count, _config.Display.MaxNamesInMessage);
             var spectatorNames = new List<string>();
@@ -186,59 +86,16 @@ namespace SpectatorList.Display
                 int remaining = spectators.Count - maxToShow;
                 string andMoreText = _plugin.Localizer["and_more", remaining];
                 andMoreText = andMoreText.Replace("[SpectatorList]", "").Trim();
-                spectatorsList += $", {andMoreText}";
+                string escapedMore = System.Net.WebUtility.HtmlEncode(andMoreText);
+                spectatorsList += $", {escapedMore}";
             }
 
-            string html = _config.Display.CenterMessage.CustomHtmlTemplate;
-            html = html.Replace("{TITLE}", titleText);
+            string html = _config.Display.CenterMessageHtml;
+            html = html.Replace("{TITLE}", escapedTitle);
             html = html.Replace("{SPECTATORS}", spectatorsList);
             html = html.Replace("{COUNT}", spectators.Count.ToString());
 
             return html;
-        }
-
-        private string BuildDefaultHtmlMessage(List<CCSPlayerController> spectators)
-        {
-            var sb = new StringBuilder();
-
-            string titleText = _plugin.Localizer["spectators_title", spectators.Count];
-            titleText = titleText.Replace("[SpectatorList]", "").Trim();
-            string escapedTitle = System.Net.WebUtility.HtmlEncode(titleText);
-
-            // Título
-            sb.Append($"<font class='fontSize-m' color='#FFD700'>{escapedTitle}</font>");
-            sb.Append("<br>");
-
-            int maxToShow = Math.Min(spectators.Count, _config.Display.MaxNamesInMessage);
-            var spectatorNames = new List<string>();
-
-            for (int i = 0; i < maxToShow; i++)
-            {
-                var spectator = spectators[i];
-                if (spectator.IsValid && !string.IsNullOrEmpty(spectator.PlayerName))
-                {
-                    string escapedName = System.Net.WebUtility.HtmlEncode(spectator.PlayerName);
-                    spectatorNames.Add(escapedName);
-                }
-            }
-
-            if (spectatorNames.Count > 0)
-            {
-                string namesList = string.Join(", ", spectatorNames);
-
-                if (spectators.Count > maxToShow)
-                {
-                    int remaining = spectators.Count - maxToShow;
-                    string andMoreText = _plugin.Localizer["and_more", remaining];
-                    andMoreText = andMoreText.Replace("[SpectatorList]", "").Trim();
-                    string escapedMore = System.Net.WebUtility.HtmlEncode(andMoreText);
-                    namesList += $", {escapedMore}";
-                }
-
-                sb.Append($"<font class='fontSize-s' color='#87CEEB'>{namesList}</font>");
-            }
-
-            return sb.ToString();
         }
 
         public void HideDisplay()
@@ -251,15 +108,10 @@ namespace SpectatorList.Display
                 _hideTimer?.Kill();
                 _hideTimer = null;
 
-                if (_messageType == CenterMessageType.CenterHtml && _onTickHandler != null)
+                if (_onTickHandler != null)
                 {
                     _plugin.RemoveListener(_onTickHandler);
                     _onTickHandler = null;
-                }
-
-                if (_player.IsValid)
-                {
-                    _player.PrintToCenter("");
                 }
 
                 _currentMessage = null;
@@ -278,13 +130,6 @@ namespace SpectatorList.Display
 
             if (_onTickHandler != null)
             {
-                try
-                {
-                    _plugin.RemoveListener(_onTickHandler);
-                }
-                catch
-                {
-                }
                 _onTickHandler = null;
             }
 
